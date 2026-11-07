@@ -1,0 +1,9 @@
+/target/
+/.tools/
+/.reference/
+/output/
+/dist/
+*.tmp
+
+__pycache__/
+*.py[cod]

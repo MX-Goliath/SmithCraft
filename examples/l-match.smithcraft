@@ -1,0 +1,86 @@
+{
+  "title": "25 to 50 ohm L-match",
+  "z0": 50.0,
+  "default_hz": 1000000000.0,
+  "points": [
+    {
+      "name": "DP1",
+      "z": [
+        25.0,
+        0.0
+      ],
+      "hz": 1000000000.0
+    }
+  ],
+  "start": 0,
+  "elements": [
+    {
+      "kind": "SeriesL",
+      "value": 3.9788735772973833,
+      "l_nh": 10.0,
+      "c_pf": 10.0,
+      "z0": 50.0,
+      "er": 1.0,
+      "loss": 0.0,
+      "reference_hz": 1000000000.0,
+      "enabled": true
+    },
+    {
+      "kind": "ShuntC",
+      "value": 3.183098861837907,
+      "l_nh": 10.0,
+      "c_pf": 10.0,
+      "z0": 50.0,
+      "er": 1.0,
+      "loss": 0.0,
+      "reference_hz": 1000000000.0,
+      "enabled": true
+    }
+  ],
+  "circles": [
+    {
+      "label": "VSWR = 2.000",
+      "center": [
+        0.0,
+        0.0
+      ],
+      "radius": 0.3333333333333333,
+      "visible": true,
+      "highlighted": false,
+      "q": null
+    }
+  ],
+  "sweep": {
+    "start": 500000000.0,
+    "stop": 1500000000.0,
+    "count": 101,
+    "logarithmic": false,
+    "datapoints": false,
+    "visible": true
+  },
+  "settings": {
+    "z_grid": true,
+    "y_grid": true,
+    "labels": true,
+    "grid_width": 0.7,
+    "trace_width": 2.0,
+    "z_color": [
+      210,
+      45,
+      50
+    ],
+    "y_color": [
+      15,
+      139,
+      198
+    ],
+    "trace_color": [
+      40,
+      90,
+      195
+    ],
+    "vertical": false,
+    "log_frequency": false
+  },
+  "network": null
+}

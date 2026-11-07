@@ -1,0 +1,119 @@
+name: Build distributions
+
+on:
+  push:
+    branches: [main, master]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: Windows x86-64 (setup + portable)
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust toolchain
+        shell: pwsh
+        run: rustup toolchain install 1.99.1 --profile minimal --component rustfmt --component clippy --target x86_64-pc-windows-msvc
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: windows-msvc-1.99.1-${{ hashFiles('Cargo.lock') }}
+      - name: Check, test, and lint
+        shell: pwsh
+        run: |
+          cargo fmt --check
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cargo test --locked --target x86_64-pc-windows-msvc
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cargo clippy --locked --all-targets --target x86_64-pc-windows-msvc -- -D warnings
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Install Inno Setup compiler
+        shell: pwsh
+        run: |
+          ./tools/install-inno.ps1
+      - name: Package Windows
+        shell: pwsh
+        run: ./tools/package-windows.ps1 -Target x86_64-pc-windows-msvc -Installer
+      - name: Check portable archive
+        shell: pwsh
+        run: |
+          $archives = @(Get-ChildItem dist/artifacts/*-portable.zip)
+          if ($archives.Count -ne 1) { throw 'Expected one portable archive' }
+          Expand-Archive -LiteralPath $archives[0].FullName -DestinationPath .tools/portable-check
+          $folders = @(Get-ChildItem .tools/portable-check -Directory)
+          if ($folders.Count -ne 1) { throw 'Expected one portable directory' }
+          $folder = $folders[0]
+          if (!(Test-Path (Join-Path $folder.FullName 'portable.txt'))) { throw 'Missing portable marker' }
+          $process = Start-Process -FilePath (Join-Path $folder.FullName 'SmithCraft.exe') -ArgumentList '--version' -WindowStyle Hidden -Wait -PassThru -RedirectStandardOutput .tools/version.txt
+          if ($process.ExitCode) { throw 'Portable executable failed' }
+          if ((Get-Content .tools/version.txt -Raw).Trim() -notmatch '^SmithCraft \d+\.\d+\.\d+$') { throw 'Invalid executable version' }
+      - name: Check installer
+        shell: pwsh
+        run: |
+          $setups = @(Get-ChildItem dist/artifacts/*-setup.exe)
+          if ($setups.Count -ne 1) { throw 'Expected one installer' }
+          $destination = Join-Path $PWD '.tools/installed-check'
+          $arguments = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/NOICONS', '/TASKS=""', ('/DIR="{0}"' -f $destination))
+          $process = Start-Process -FilePath $setups[0].FullName -ArgumentList $arguments -WindowStyle Hidden -Wait -PassThru
+          if ($process.ExitCode) { throw 'Installer failed' }
+          if (Test-Path (Join-Path $destination 'portable.txt')) { throw 'Installed edition must use the user profile' }
+          $process = Start-Process -FilePath (Join-Path $destination 'SmithCraft.exe') -ArgumentList '--version' -WindowStyle Hidden -Wait -PassThru -RedirectStandardOutput .tools/installed-version.txt
+          if ($process.ExitCode) { throw 'Installed executable failed' }
+          if ((Get-Content .tools/installed-version.txt -Raw).Trim() -ne (Get-Content .tools/version.txt -Raw).Trim()) { throw 'Installer and portable versions differ' }
+          $process = Start-Process -FilePath (Join-Path $destination 'unins000.exe') -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -WindowStyle Hidden -Wait -PassThru
+          if ($process.ExitCode) { throw 'Uninstall failed' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SmithCraft-windows-x86_64
+          path: dist/artifacts/*
+          if-no-files-found: error
+
+  linux:
+    name: Linux x86-64 (AppImage)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build and smoke-test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config curl python3 file \
+            libx11-dev libxi-dev libxcursor-dev libxrandr-dev libxcb-shape0-dev \
+            libxcb-xfixes0-dev libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev \
+            libgl1-mesa-dev libegl1-mesa-dev libgl1-mesa-dri libfuse2 \
+            librsvg2-bin desktop-file-utils xvfb xauth dbus-x11
+      - name: Install Rust toolchain
+        run: rustup toolchain install 1.99.1 --profile minimal --component rustfmt --component clippy --target x86_64-unknown-linux-gnu
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+            .tools/appimage
+          key: linux-x86_64-1.99.1-appimage-v1-${{ hashFiles('Cargo.lock') }}
+      - name: Check, test, and lint
+        run: |
+          cargo fmt --check
+          cargo test --locked
+          cargo clippy --locked --all-targets -- -D warnings
+          desktop-file-validate packaging/linux/smithcraft.desktop
+          for script in tools/package-linux.sh tools/smoke-linux.sh packaging/linux/AppRun; do
+            bash -n "$script"
+          done
+      - name: Package AppImage
+        run: bash tools/package-linux.sh
+      - name: Smoke-test packaged AppImage
+        run: bash tools/smoke-linux.sh dist/artifacts/*.AppImage
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SmithCraft-linux-x86_64
+          path: dist/artifacts/*
+          if-no-files-found: error

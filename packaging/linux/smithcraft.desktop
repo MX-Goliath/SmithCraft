@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=SmithCraft
+Comment=Smith chart and RF matching network workbench
+Exec=smithcraft %F
+Icon=smithcraft
+Terminal=false
+Categories=Science;Engineering;
+StartupNotify=true
